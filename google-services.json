@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "596726644761",
+    "project_id": "primera-app-notif",
+    "storage_bucket": "primera-app-notif.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:596726644761:android:231173b0606aa92889aa88",
+        "android_client_info": {
+          "package_name": "com.primeraappmovil.notificaciones"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCoUTC9mzpaXyAqLN4fcBkEWMu0t2vxfnM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
