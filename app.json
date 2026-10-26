@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "primera-app-movil",
+    "slug": "primera-app-movil",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "La app usa tu ubicación para mostrar las coordenadas de la bodega.",
+        "NSMotionUsageDescription": "La app usa el movimiento del dispositivo para mostrar los datos del acelerómetro."
+      }
+    },
+    "android": {
+      "package": "com.primeraappmovil.notificaciones",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "default"
+        }
+      ]
+    ],
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "d0ddeca4-21fd-4156-bd08-952a6708e658"
+      }
+    },
+    "owner": "jostib"
+  }
+}
