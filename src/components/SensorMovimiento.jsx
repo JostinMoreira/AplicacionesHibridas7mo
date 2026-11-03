@@ -10,7 +10,6 @@ export default function SensorMovimiento() {
         let isMounted = true;
         let subscription = null;
 
-        // Si es web y estamos en navegador común sin sensores de orientación
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
             const manejarMovimientoWeb = (event) => {
                 if (!isMounted) return;
@@ -33,7 +32,6 @@ export default function SensorMovimiento() {
                 setDisponible(false);
             }
         } else {
-            // Entorno nativo (Android / iOS con Expo Go o Dev Client)
             Accelerometer.isAvailableAsync()
                 .then((isAvailable) => {
                     if (!isMounted) return;

@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
+import { Alert, Platform, View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
+import * as Notifications from 'expo-notifications';
+
+const CANAL_INVENTARIO = 'inventario';
 
 export default function SolicitudScreen() {
     const [titulo, setTitulo] = useState('');
@@ -8,12 +11,54 @@ export default function SolicitudScreen() {
         { id: '2', titulo: 'Tornillos x 10' },
     ]);
 
-    const agregar = () => {
+    const agregar = async () => {
         if (!titulo.trim()) {
             return;
         }
-        setLista([...lista, { id: Date.now().toString(), titulo: titulo.trim() }]);
+
+        const nombreProducto = titulo.trim();
+        setLista((actual) => [...actual, { id: Date.now().toString(), titulo: nombreProducto }]);
         setTitulo('');
+
+        try {
+            if (Platform.OS === 'android') {
+                await Notifications.setNotificationChannelAsync(CANAL_INVENTARIO, {
+                    name: 'Avisos de inventario',
+                    importance: Notifications.AndroidImportance.MAX,
+                    vibrationPattern: [0, 250, 250, 250],
+                });
+            }
+
+            let permisos = await Notifications.getPermissionsAsync();
+            if (permisos.status !== 'granted') {
+                permisos = await Notifications.requestPermissionsAsync();
+            }
+
+            if (permisos.status !== 'granted') {
+                Alert.alert(
+                    'Producto agregado',
+                    'Se agregó al inventario, pero las notificaciones están desactivadas.'
+                );
+                return;
+            }
+
+            await Notifications.scheduleNotificationAsync({
+                content: {
+                    title: 'Producto agregado correctamente',
+                    body: `${nombreProducto} se agregó al inventario.`,
+                    sound: true,
+                    data: { tipo: 'inventario-agregado', producto: nombreProducto },
+                },
+                trigger: Platform.OS === 'android'
+                    ? { channelId: CANAL_INVENTARIO }
+                    : null,
+            });
+        } catch (error) {
+            Alert.alert(
+                'Producto agregado',
+                'Se agregó al inventario, pero no se pudo mostrar la notificación.'
+            );
+        }
     };
 
     return (

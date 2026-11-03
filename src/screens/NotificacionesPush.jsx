@@ -9,7 +9,6 @@ import {
     View,
 } from 'react-native';
 import Constants from 'expo-constants';
-import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 
 Notifications.setNotificationHandler({
@@ -34,17 +33,10 @@ async function prepararCanalAndroid() {
     });
 }
 
-function ocultarToken(token) {
-    if (!token) return '';
-    if (token.length < 18) return `${token.slice(0, 4)}••••`;
-    return `${token.slice(0, 12)}••••••••${token.slice(-6)}`;
-}
-
 export default function NotificacionesPushScreen() {
-    const [token, setToken] = useState('');
-    const [estadoPermiso, setEstadoPermiso] = useState('Sin consultar');
     const [notificacion, setNotificacion] = useState(null);
-    const [cargando, setCargando] = useState(false);
+    const [enviandoPush, setEnviandoPush] = useState(false);
+    const [estadoEnvioPush, setEstadoEnvioPush] = useState('');
     const [error, setError] = useState('');
 
     useEffect(() => {
@@ -63,47 +55,78 @@ export default function NotificacionesPushScreen() {
         };
     }, []);
 
-    const solicitarPermisosYToken = async () => {
-        setCargando(true);
+    const obtenerTokenPush = async () => {
+        await prepararCanalAndroid();
+        const permisosActuales = await Notifications.getPermissionsAsync();
+        const permisosFinales = permisosActuales.status === 'granted'
+            ? permisosActuales
+            : await Notifications.requestPermissionsAsync();
+
+        if (permisosFinales.status !== 'granted') {
+            throw new Error('No se concedieron permisos para mostrar notificaciones.');
+        }
+
+        const projectId = Constants.expoConfig?.extra?.eas?.projectId
+            ?? Constants.easConfig?.projectId;
+        if (!projectId) {
+            throw new Error('Falta configurar el projectId de EAS.');
+        }
+
+        const resultado = await Notifications.getExpoPushTokenAsync({ projectId });
+        return resultado.data;
+    };
+
+    const enviarNotificacionPushDePrueba = async () => {
+        setEnviandoPush(true);
         setError('');
+        setEstadoEnvioPush('');
 
         try {
-            await prepararCanalAndroid();
-            const permisosActuales = await Notifications.getPermissionsAsync();
-            setEstadoPermiso(permisosActuales.status);
+            const token = await obtenerTokenPush();
+            const respuesta = await fetch('https://exp.host/--/api/v2/push/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: token,
+                    title: 'Prueba push remota',
+                    body: 'La notificación llegó desde Expo al emulador Android.',
+                    sound: 'default',
+                    channelId: CANAL_NOTIFICACIONES,
+                    data: { tipo: 'practica-push-remota' },
+                }),
+            });
+            const resultado = await respuesta.json();
+            const ticket = Array.isArray(resultado.data) ? resultado.data[0] : resultado.data;
 
-            let permisosFinales = permisosActuales;
-            if (permisosActuales.status !== 'granted') {
-                permisosFinales = await Notifications.requestPermissionsAsync();
-                setEstadoPermiso(permisosFinales.status);
+            if (!respuesta.ok || ticket?.status !== 'ok') {
+                throw new Error(ticket?.message || resultado.errors?.[0]?.message || 'Expo no aceptó el envío de prueba.');
             }
 
-            if (permisosFinales.status !== 'granted') {
-                setToken('');
-                setError('No se concedieron permisos. Puedes activarlos en los ajustes del dispositivo.');
-                return;
-            }
+            setEstadoEnvioPush('Expo aceptó el envío. Consultando su comprobante de entrega…');
+            if (ticket.id) {
+                await new Promise((resolve) => setTimeout(resolve, 12000));
+                const respuestaComprobante = await fetch('https://exp.host/--/api/v2/push/getReceipts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: [ticket.id] }),
+                });
+                const comprobante = await respuestaComprobante.json();
+                const recibo = comprobante.data?.[ticket.id];
 
-            if (!Device.isDevice) {
-                setToken('');
-                setError('Para obtener un token push usa un dispositivo físico Android. La notificación local sí puede probarse en Expo Go.');
-                return;
-            }
+                if (recibo?.status === 'error') {
+                    throw new Error(recibo.message || recibo.details?.error || 'FCM rechazó la notificación.');
+                }
 
-            const projectId = Constants.expoConfig?.extra?.eas?.projectId
-                ?? Constants.easConfig?.projectId;
-            if (!projectId) {
-                setToken('');
-                setError('Falta el projectId de EAS. Configura tu proyecto con eas init y añade el ID real en extra.eas.projectId.');
-                return;
+                if (recibo?.status === 'ok') {
+                    setEstadoEnvioPush('FCM aceptó la notificación. Revisa el aviso y el último evento recibido.');
+                } else {
+                    setEstadoEnvioPush('Expo aceptó el envío; todavía no hay comprobante disponible.');
+                }
             }
-
-            const resultado = await Notifications.getExpoPushTokenAsync({ projectId });
-            setToken(resultado.data);
         } catch (e) {
-            setError(e.message || 'No se pudo obtener el token. Revisa conexión, permisos y configuración de Expo.');
+            setError(e.message || 'No se pudo enviar la notificación push de prueba.');
         } finally {
-            setCargando(false);
+            setEnviandoPush(false);
         }
     };
 
@@ -129,34 +152,25 @@ export default function NotificacionesPushScreen() {
         <ScrollView contentContainerStyle={styles.contenedor}>
             <Text style={styles.titulo}>Notificaciones push</Text>
             <Text style={styles.subtitulo}>
-                Práctica individual: permisos, token Expo y notificación local.
+                Práctica individual: avisos remotos y locales.
             </Text>
 
             <View style={styles.tarjeta}>
-                <Text style={styles.etiqueta}>Permiso</Text>
-                <Text style={styles.valor}>{estadoPermiso}</Text>
+                <Text style={styles.etiqueta}>Prueba push remota</Text>
                 <Text style={styles.ayuda}>
-                    Primero se crea el canal Android y luego se consulta o solicita el permiso.
+                    Envía una notificación de prueba a este dispositivo.
                 </Text>
-
                 <Pressable
                     accessibilityRole="button"
-                    disabled={cargando}
-                    style={[styles.boton, cargando && styles.botonDeshabilitado]}
-                    onPress={solicitarPermisosYToken}
+                    disabled={enviandoPush}
+                    style={[styles.boton, enviandoPush && styles.botonDeshabilitado]}
+                    onPress={enviarNotificacionPushDePrueba}
                 >
-                    {cargando
+                    {enviandoPush
                         ? <ActivityIndicator color="#ffffff" />
-                        : <Text style={styles.textoBoton}>Solicitar permisos y obtener token</Text>}
+                        : <Text style={styles.textoBoton}>Enviar push remota de prueba</Text>}
                 </Pressable>
-
-                <Text style={styles.etiqueta}>ExpoPushToken</Text>
-                <Text selectable style={styles.token}>
-                    {token ? ocultarToken(token) : 'Aún no obtenido'}
-                </Text>
-                <Text style={styles.ayuda}>
-                    El token completo se mantiene en memoria para la práctica. No lo compartas públicamente.
-                </Text>
+                {estadoEnvioPush ? <Text style={styles.ayuda}>{estadoEnvioPush}</Text> : null}
             </View>
 
             <View style={styles.tarjeta}>
@@ -178,7 +192,7 @@ export default function NotificacionesPushScreen() {
             {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
 
             <Text style={styles.nota}>
-                Push remota Android requiere una development build y credenciales FCM V1. Expo Go permite probar la notificación local, pero no la recepción push remota.
+                Push remoto Android requiere una development build y credenciales FCM V1. Los emuladores Android con Google Play Services también pueden recibir notificaciones push.
             </Text>
         </ScrollView>
     );
@@ -227,12 +241,6 @@ const styles = StyleSheet.create({
         fontSize: 13,
         lineHeight: 19,
         marginTop: 6,
-    },
-    token: {
-        color: '#1d4ed8',
-        fontSize: 14,
-        fontWeight: '600',
-        marginTop: 4,
     },
     boton: {
         alignItems: 'center',
